@@ -7,3 +7,5 @@ test*.wav
 vectorstore/
 chat_history.db
 data/
+chat_history.db
+chat_history.db
