@@ -4,7 +4,7 @@ A production-grade AI assistant that lets healthcare professionals query medical
 
 ## Demo
 
-> Add demo video link here after recording
+> [Demo Video](https://drive.google.com/file/d/1NDDPdhT35RaXfVTBzhwFRURnj_U8hR77/view?usp=sharing)
 
 ## Features
 
