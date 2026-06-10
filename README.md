@@ -1,16 +1,16 @@
 # Voice-Enabled Medical RAG Assistant
 
-A production-ready AI assistant that lets healthcare professionals query medical documents by voice or text — and get accurate, source-cited answers in seconds.
+**A production-ready AI assistant that lets healthcare professionals query medical documents by voice or text — and get accurate, source-cited answers in seconds.**
 
 Built for environments where speed matters. Tested on MSF Clinical Guidelines (100 pages, 253 chunks).
 
-**[▶ Watch Demo](https://drive.google.com/file/d/1NDDPdhT35RaXfVTBzhwFRURnj_U8hR77/view)**
+[![Demo Video](https://img.shields.io/badge/▶_Watch_Demo-Google_Drive-red?style=for-the-badge)](https://drive.google.com/file/d/1NDDPdhT35RaXfVTBzhwFRURnj_U8hR77/view?usp=sharing)
 
 ---
 
 ## What it does
 
-A nurse asks: *"What is the paracetamol dose for a 10kg child with fever?"*  
+A nurse asks: *"What is the paracetamol dose for a 10kg child with fever?"*
 The assistant retrieves the exact dosage from page 36 of the clinical guidelines and speaks the answer aloud — in under 3 seconds.
 
 - **Voice input** — speak your query, get a spoken answer (Whisper STT + gTTS TTS)
@@ -22,19 +22,52 @@ The assistant retrieves the exact dosage from page 36 of the clinical guidelines
 
 ---
 
+## Architecture
+
+```
+Voice (WAV) ──▶ Whisper STT ──▶ Text Query ──▶ all-MiniLM-L6-v2 ──▶ FAISS (top-4)
+                                                                         │
+                                                    Retrieved Chunks + Query
+                                                                         │
+                                                                         ▼
+MP3 Audio ◀── gTTS ◀── Answer + Sources ◀── Groq LLaMA-3.3-70B
+                                                                         │
+                                              SQLite (session memory) ◀──┘
+```
+
+**Pipeline:** Whisper STT → semantic embedding → FAISS retrieval → LLM generation → gTTS TTS — all local except the Groq API call.
+
+---
+
+## Results
+
+| Query | Result | Source |
+|-------|--------|--------|
+| Paracetamol dose for children | ✅ Correct — 15 mg/kg with age variants | p. 36 |
+| Transfusion thresholds for severe anaemia | ✅ Correct — Hb thresholds with conditions | pp. 47–50 |
+| Hypoglycaemia treatment protocol | ✅ Correct — 2 ml/kg 10% glucose IV | pp. 32–33 |
+| Pneumonia antibiotic protocol | ✅ Correct — ceftriaxone + step-down | pp. 97–100 |
+| Febrile seizure escalation | ⚠️ Partial — missed >5 min threshold | — |
+
+- **4/5 clinical queries answered correctly** with exact page citations
+- Sub-5s end-to-end latency on CPU (STT + retrieval + generation + TTS)
+- Voice pipeline correctly transcribed and answered 3/4 voice queries
+
+---
+
 ## Stack
 
-| Component | Technology |
-|---|---|
-| LLM | Groq `llama-3.3-70b-versatile` |
-| Embeddings | HuggingFace `all-MiniLM-L6-v2` (local, no API) |
-| Vector Store | FAISS (local) |
-| Framework | LangChain |
-| API | FastAPI + Uvicorn |
-| STT | OpenAI Whisper base (local) |
-| TTS | gTTS |
-| Database | SQLite via SQLAlchemy |
-| Container | Docker + docker-compose |
+| Component | Technology | Why |
+|-----------|-----------|-----|
+| LLM | Groq llama-3.3-70b-versatile | 300+ tokens/sec, free, no daily limits |
+| Embeddings | HuggingFace all-MiniLM-L6-v2 | 80 MB, local, no API key needed |
+| Vector Store | FAISS | Millisecond retrieval, zero server overhead |
+| Framework | LangChain | ConversationalRetrievalChain with built-in memory |
+| API | FastAPI + Uvicorn | Async, automatic Swagger docs |
+| STT | OpenAI Whisper base (local) | Free, runs on CPU, no API key |
+| TTS | gTTS | Free, clear audio output |
+| Database | SQLite via SQLAlchemy | Zero-config persistent session memory |
+| Container | Docker + docker-compose | One-command deployment |
 
 ---
 
@@ -64,13 +97,13 @@ uvicorn app.main:app --reload
 ## API Endpoints
 
 | Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Health check |
-| POST | `/ingest` | Build FAISS index from PDFs in `data/` |
-| POST | `/ask` | Text query → JSON answer + citations |
-| POST | `/ask/voice` | Voice query (WAV) → JSON + MP3 response |
-| GET | `/history/{session_id}` | Retrieve conversation history |
-| POST | `/clear/{session_id}` | Reset session memory |
+|--------|----------|-------------|
+| `GET` | `/` | Health check |
+| `POST` | `/ingest` | Build FAISS index from PDFs in `data/` |
+| `POST` | `/ask` | Text query → JSON answer + citations |
+| `POST` | `/ask/voice` | Voice query (WAV) → JSON + MP3 response |
+| `GET` | `/history/{session_id}` | Retrieve conversation history |
+| `POST` | `/clear/{session_id}` | Reset session memory |
 
 ### Example
 
@@ -95,19 +128,21 @@ curl -X POST http://localhost:8000/ask \
 
 ## Knowledge Base
 
-Currently ingested: MSF Clinical Guidelines (100 pages, 253 chunks).  
+Currently ingested: **MSF Clinical Guidelines** (100 pages, 253 chunks).
+
 Drop any medical PDF into `data/` and run `POST /ingest` to add it.
 
 ---
 
 ## Known Limitations
 
-- Whisper `base` misrecognises medical terms (e.g. "paracetamol" → "parasitamol") — upgrading to `whisper-small` improves accuracy
-- `chunk_size=1000` can split protocols mid-table — reducing to 600 with `overlap=150` is a planned fix
-- Docker not tested on Windows — use local setup on Windows
+- **Whisper base** misrecognises medical terms (e.g. "paracetamol" → "parasitamol") — upgrading to whisper-small improves accuracy
+- **chunk_size=1000** can split protocols mid-table — reducing to 600 with overlap=150 is a planned fix
+- **No automated evaluation** — answer quality assessed manually, not with RAGAS or BERTScore
+- **Docker** not tested on Windows — use local setup on Windows
 
 ---
 
 ## Author
 
-**P. Krishna Vamsi** — [GitHub](https://github.com/Vamsi12022003) · [LinkedIn](your-linkedin-url)
+**P. Krishna Vamsi** — [GitHub](https://github.com/Vamsi12022003) · [LinkedIn](https://www.linkedin.com/in/pallapu-krishna-vamsi-850669245/)
